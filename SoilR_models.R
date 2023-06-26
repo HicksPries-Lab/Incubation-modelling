@@ -7,13 +7,15 @@ library(SoilR)
 library(FME)
 
 # Intializations
-i = 2 # CHANGE IF INTERESTED, treatment type 1 = 'Soil Control', 2 = 'Corn Stover', 3 = 'AD HLFB', '4 = C-CBP HLFB', 5 = 'DASE HLFB'
+i = 3 # CHANGE IF INTERESTED, treatment type 1 = 'Soil Control', 2 = 'Corn Stover', 3 = 'AD HLFB', '4 = C-CBP HLFB', 5 = 'DASE HLFB'
 n = 2 # start this at 2 for things to save correctly, column index, save to right column in fitFrames
 soil_typ = 1  # 1 = 'Palouse', 2 = 'Vershire'
 
 # Initial Soil + Residue input into treatment jars [mg C]
-CinitsP <- c(514.4336596, 1145.656643, 1059.347782, 1151.299211, 1188.126723) # Information from INC2 -> IRMS -> "IRMS_summary" -> IRMS_Pre
+CinitsP <- c(514.4336596, 1145.656643, 1059.347782, 1151.299211, 1188.126723) # these numbers reflect if I average C per treatment, Information from INC2 -> IRMS -> "IRMS_summary" -> IRMS_Pre
+#CinitsP <- c(514.4336596, 1145.656643, 1059.347782, 1151.299211, 1188.126723) # these numbers reflect if I average C per treatment, Information from INC2 -> IRMS -> "IRMS_summary" -> IRMS_Pre
 CinitsV <- c(1113.366093, 1752.370126, 1651.682688, 1751.267604, 1783.200554)
+
 Cinits <- list(CinitsP, CinitsV)
 
 AICc_1p_tot <- numeric(length=5)
@@ -45,9 +47,17 @@ days <- seq(from = 1, to = end_day, by = 365/5)
 #days <- seq(0, round(last(CO2flux$time)))  # this days vector is just the length of your data
 
 # INPUT VECTOR - CHANGE HERE, Either you can do inputs_frame = 0 for no inputs, or use the other loop
-# C from residue for each treatment [mg]
-inputs_valsP <- c(0,	632.8138108,	544.071363,	637.547334,	672.8124268)	 # Information from INC2 -> IRMS -> "IRMS_summary" -> IRMS_Pre  
-inputs_valsV <- c(0,	634.9023052,	539.3092504,	635.4292365,	672.8124268)
+# C from residue for each treatment [mg], COMMENT OUT ONE SET
+
+# INPUTS 1
+# inputs_valsP <- c(0,	632.8138108,	544.071363,	637.547334,	672.8124268)	 # these numbers reflect if I average the residues in each treatment, Information from INC2 -> IRMS -> "IRMS_summary" -> IRMS_Pre  
+# inputs_valsV <- c(0,	634.9023052,	539.3092504,	635.4292365,	672.8124268)
+
+# INPUTS 2
+inputs_valsP <- c(CinitsP[1], CinitsP[2]-CinitsP[1], CinitsP[3]-CinitsP[1], CinitsP[4]-CinitsP[1], CinitsP[5]-CinitsP[1])	 # these numbers reflect if I subtract out soil from Cinits vectors
+inputs_valsV <- c(CinitsV[1], CinitsV[2]-CinitsV[1], CinitsV[3]-CinitsV[1], CinitsV[4]-CinitsV[1], CinitsV[5]-CinitsV[1])
+
+
 
 # # OPTION 1: Inputs every end of year, 99 inputs in dataframe, this only works for inputs w/ time steps of 365/5 days
 # inputs_mainframe <- data.frame(days, matrix(0, length(days), 5))
@@ -59,7 +69,7 @@ inputs_valsV <- c(0,	634.9023052,	539.3092504,	635.4292365,	672.8124268)
 #   a = a + 1
 #   b = b + 1
 # }
-# write.csv(inputs_mainframe, file = 'inputframe.csv') ### CHANGE V/P ###
+# write.csv(inputs_mainframe, file = 'inputframeP2.csv') ### CHANGE V/P ###
 
 # OPTION 2: 0 inputs throughout year after first one
  inputs_frame = 0
@@ -80,7 +90,7 @@ theme_C <- theme_light() +
 CO2flux_0 <- read.csv("data_modP.csv", header=TRUE) ### CHANGE V/P ###
 
 # LOOP THROUGH ALL MODELS
-while (i < 6) {    # COMMENT IN/OUT TO CHECK FOR ONE TREATMENT, loop through 5 treatments
+#while (i < 6) {    # COMMENT IN/OUT TO CHECK FOR ONE TREATMENT, loop through 5 treatments
 
 CO2flux <- CO2flux_0 %>%
   filter(Num == i) %>%    # loop through treatment
@@ -219,26 +229,26 @@ options(scipen = 999)
 twops_par[[i]] <- eCO2fit$par
 
 #Run the model again with best parameter set
-fitmod=TwopSeriesModel(t=days, ks=c(k_soil,eCO2fit$par[1]), 
+fitmod=TwopSeriesModel(t=days, ks=c(k_soil,eCO2fit$par[1]),
                        a21=eCO2fit$par[2]*k_soil,
-                       C0=Ctotal*c(gamma_soil[i],1-gamma_soil[i]), 
+                       C0=Ctotal*c(gamma_soil[i],1-gamma_soil[i]),
                        In = inputs_frame)
 fitCumm=getAccumulatedRelease(fitmod)
 
 npars=length(eCO2fit$par)
-AIC_2ps=(2*npars)-2*log(eCO2fit$ms) 
-AICc_2ps=AIC_2ps+(((2*npars^2)+2*npars)/(length(CO2flux[,1])-npars-1)) 
+AIC_2ps=(2*npars)-2*log(eCO2fit$ms)
+AICc_2ps=AIC_2ps+(((2*npars^2)+2*npars)/(length(CO2flux[,1])-npars-1))
 
 fitCumm3 <- rowSums(fitCumm)
 totalfitCumm[, n] <- fitCumm3
 n <- n + 1
 fitframe3 <- data.frame(days, fitCumm3)
 
-## Cumulative CO2 Released
+# ## Cumulative CO2 Released
 plot2ps <- ggplot() +
   geom_point(data = CO2flux, aes(x = time, y = cummCO2), shape = 1) +
   geom_line(data = fitframe3, aes(x = days, y = fitCumm3)) +
-  xlim(0, 1.5*max(CO2flux$time)) +  # to only see relevant model data
+  #xlim(0, 1.5*max(CO2flux$time)) +  # to only see relevant model data
   labs(x = 'Time [days]', y = 'Cumulative CO2 Released [mg]', title = '2 Pool Series Model') +
   theme_C
 plot2ps
@@ -283,7 +293,7 @@ fitframe4 <- data.frame(days, fitCumm4)
 plot2pp <- ggplot() +
   geom_point(data = CO2flux, aes(x = time, y = cummCO2), shape = 1) +
   geom_line(data = fitframe4, aes(x = days, y = fitCumm4)) +
-  xlim(0, 1.5*max(CO2flux$time)) +  # to only see relevant model data
+  xlim(0, .5*max(CO2flux$time)) +  # to only see relevant model data
   labs(x = 'Time [days]', y = 'Cumulative CO2 Released [mg]', title = '2 Pool Parallel Model') +
   theme_C
 plot2pp
@@ -316,5 +326,5 @@ write.csv(twopp_par, file = 'twopp_P_fixedkgam.csv') ### CHANGE V/P ###
 write.csv(twops_par, file = 'twops_P_fixedkgam.csv') ### CHANGE V/P ###
 
 # Export the cummCO2
-write.csv(totalfitCumm, file = 'projectedcummCO2P_fixedkgam.csv') ### CHANGE V/P ###
+write.csv(totalfitCumm, file = 'projectedcummCO2P_fixedkgam2.csv') ### CHANGE V/P ###
 
